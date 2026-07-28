@@ -80,7 +80,8 @@ export interface VoteEnvelope {
    * */
   encryptionKeyIndexes: number[];
   /**
-   * Optional free-text note attached by the voter (max 256 bytes), encoded as bytes
+   * Optional free-text note attached by the voter (max 256 bytes), encoded as bytes.
+   * This is the raw envelope value; for the decoded note see `VoteInfoResponse.memo`
    * */
   memo?: string;
 }
