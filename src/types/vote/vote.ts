@@ -42,11 +42,11 @@ export class Vote {
    *
    * An empty memo is normalized to `undefined`, matching how the chain stores it.
    */
-  get memo(): string {
+  get memo(): string | undefined {
     return this._memo;
   }
 
-  set memo(value: string) {
+  set memo(value: string | undefined) {
     if (value && Buffer.byteLength(value, 'utf8') > Vote.MAX_MEMO_BYTES) {
       throw new Error('Memo cannot be longer than ' + Vote.MAX_MEMO_BYTES + ' bytes');
     }
