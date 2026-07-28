@@ -1,4 +1,4 @@
-import { Vote } from '../../../src';
+import { AnonymousVote, CspVote, Vote } from '../../../src';
 
 describe('Vote tests', () => {
   it('should have the correct type', () => {
@@ -21,5 +21,23 @@ describe('Vote tests', () => {
     expect(() => new Vote([1], 'a'.repeat(257))).toThrow('Memo cannot be longer than 256 bytes');
     // multibyte characters count as their UTF-8 encoded size
     expect(() => new Vote([1], '€'.repeat(86))).toThrow('Memo cannot be longer than 256 bytes');
+  });
+  it('should normalize an empty memo to undefined', () => {
+    expect(new Vote([1], '').memo).toBeUndefined();
+    const vote = new Vote([1], 'something');
+    vote.memo = '';
+    expect(vote.memo).toBeUndefined();
+  });
+  it('should accept a memo on an anonymous vote', () => {
+    const vote = new AnonymousVote([1], 'signature', '0', 'anon note');
+    expect(vote).toBeInstanceOf(Vote);
+    expect(vote.memo).toEqual('anon note');
+    expect(new AnonymousVote([1], 'signature').memo).toBeUndefined();
+  });
+  it('should accept a memo on a csp vote', () => {
+    const vote = new CspVote([1], 'signature', undefined, undefined, 'csp note');
+    expect(vote).toBeInstanceOf(Vote);
+    expect(vote.memo).toEqual('csp note');
+    expect(new CspVote([1], 'signature').memo).toBeUndefined();
   });
 });
