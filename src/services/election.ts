@@ -20,6 +20,7 @@ import {
   PaginationResponse,
 } from '../api';
 import { CensusService } from './census';
+import { FileService } from './file';
 import { allSettled } from '../util/promise';
 import invariant from 'tiny-invariant';
 import { ElectionCore } from '../core/election';
@@ -33,6 +34,7 @@ import { Asymmetric } from '../util/encryption';
 interface ElectionServiceProperties {
   censusService: CensusService;
   chainService: ChainService;
+  fileService: FileService;
 }
 
 type ElectionServiceParameters = ServiceProperties & ElectionServiceProperties;
@@ -78,6 +80,7 @@ export type ElectionCreationStepValue =
 export class ElectionService extends Service implements ElectionServiceProperties {
   public censusService: CensusService;
   public chainService: ChainService;
+  public fileService: FileService;
 
   /**
    * Instantiate the election service.
@@ -87,6 +90,8 @@ export class ElectionService extends Service implements ElectionServicePropertie
   constructor(params: Partial<ElectionServiceParameters>) {
     super();
     Object.assign(this, params);
+    // metadata resolution has to work regardless of how the service was built
+    this.fileService = this.fileService ?? new FileService({ url: this.url });
   }
 
   public async signTransaction(
@@ -124,6 +129,31 @@ export class ElectionService extends Service implements ElectionServicePropertie
       return Promise.resolve(new CspCensus(electionInfo.census.censusRoot, electionInfo.census.censusURL));
     }
     return this.buildPublishedCensus(electionInfo);
+  }
+
+  /**
+   * Resolves the election metadata when the API could not inline it.
+   *
+   * The node only resolves `ipfs://` metadata URIs, so elections publishing
+   * their metadata elsewhere come back with no `metadata` key at all. Fetching
+   * it here saves every consumer from having to deal with a metadata-less
+   * election on its own.
+   *
+   * Never rejects: an unresolvable document leaves the election info untouched.
+   *
+   * @param electionInfo - The election information, as returned by the API
+   */
+  async resolveMetadata(electionInfo) {
+    if (electionInfo.metadata || !electionInfo.metadataURL) {
+      return electionInfo;
+    }
+
+    const metadata = await this.fileService.fetchMetadata(electionInfo.metadataURL);
+    if (metadata) {
+      electionInfo.metadata = metadata;
+    }
+
+    return electionInfo;
   }
 
   decryptMetadata(electionInfo, password) {
@@ -173,6 +203,8 @@ export class ElectionService extends Service implements ElectionServicePropertie
       throw err;
     });
 
+    await this.resolveMetadata(electionInformation);
+
     let electionInfo, census;
     try {
       electionInfo = this.decryptMetadata(electionInformation, password);
@@ -191,8 +223,8 @@ export class ElectionService extends Service implements ElectionServicePropertie
       organizationId: electionInfo.organizationId,
       title: electionInfo.metadata?.title,
       description: electionInfo.metadata?.description,
-      header: electionInfo.metadata?.media.header,
-      streamUri: electionInfo.metadata?.media.streamUri,
+      header: electionInfo.metadata?.media?.header,
+      streamUri: electionInfo.metadata?.media?.streamUri,
       meta: electionInfo.metadata?.meta,
       startDate: electionInfo.startDate,
       endDate: electionInfo.endDate,
@@ -225,14 +257,14 @@ export class ElectionService extends Service implements ElectionServicePropertie
         maxValue: electionInfo.tallyMode.maxValue,
         maxTotalCost: electionInfo.tallyMode.maxTotalCost,
       },
-      questions: electionInfo.metadata?.questions.map((question, qIndex) => ({
+      questions: electionInfo.metadata?.questions?.map((question, qIndex) => ({
         title: question.title,
         description: question.description,
         numAbstains: this.calculateMultichoiceAbstains(electionInfo.metadata.type, electionInfo.result),
         choices: question.choices.map((choice, cIndex) => ({
           title: choice.title,
           value: choice.value,
-          results: this.calculateChoiceResults(electionInfo.metadata.type.name, electionInfo.result, qIndex, cIndex),
+          results: this.calculateChoiceResults(electionInfo.metadata.type?.name, electionInfo.result, qIndex, cIndex),
           ...(choice.meta && { meta: choice.meta }),
         })),
         ...(question.meta && { meta: question.meta }),

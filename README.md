@@ -393,6 +393,29 @@ You can also fetch all the elections created for a given account using `fetchEle
 })();
 ~~~
 
+#### Metadata stored outside IPFS
+
+The API only resolves `ipfs://` metadata URIs, so elections publishing their metadata
+elsewhere (like the ones created through the Vocdoni SaaS) come back with no metadata at
+all. The SDK resolves those documents itself, best effort: an unreachable one leaves you
+with the same metadata-less election you would have gotten anyway, never with an error.
+
+Since metadata URIs come from the chain, only the hosts you trust are requested. The
+defaults cover the Vocdoni infrastructure, and self hosted deployments can extend them:
+
+~~~ts
+const client = new VocdoniSDKClient({
+  env: EnvOptions.PROD,
+  metadata: {
+    allowed_hosts: ['vocdoni.io', 'vocdoni.net', 'storage.example.com'], // `['*']` allows any host, `[]` disables resolution
+    timeout: 5000, // ms to wait for a metadata document
+    max_size: 1024 * 1024, // maximum accepted document size, in bytes
+  },
+})
+~~~
+
+Hosts match themselves and their subdomains, and only `https://` URIs are ever requested.
+
 ### Changing election status
 
 See the [Election lifecycle states][election-lifecycle-states] details for more information

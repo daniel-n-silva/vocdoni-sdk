@@ -33,4 +33,20 @@ export abstract class FileAPI extends API {
       .then((response) => response.data)
       .catch(this.isApiError);
   }
+
+  /**
+   * Fetches a document from an arbitrary location.
+   *
+   * Unlike the rest of the API methods this one does not talk to the vocdoni
+   * API, so its errors are not mapped to SDK errors: callers are expected to
+   * treat any rejection as "the document is not available".
+   *
+   * @param url - Absolute URL of the document
+   * @param timeout - Milliseconds to wait before giving up
+   * @param maxSize - Maximum accepted response size, in bytes
+   * @returns The parsed response body
+   */
+  public static fetch(url: string, timeout: number, maxSize: number): Promise<any> {
+    return axios.get(url, { timeout, maxContentLength: maxSize }).then((response) => response.data);
+  }
 }

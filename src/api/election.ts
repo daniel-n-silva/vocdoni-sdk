@@ -233,9 +233,13 @@ export interface IElectionInfoResponse {
   tallyMode: ITallyMode;
 
   /**
-   * The metadata of the election (can be encrypted)
+   * The metadata of the election (can be encrypted).
+   *
+   * Absent when the API could not resolve it: the node only resolves `ipfs://`
+   * metadata URIs, so elections publishing their metadata elsewhere come back
+   * without this key.
    */
-  metadata: ElectionMetadata | string;
+  metadata?: ElectionMetadata | string;
 }
 
 export interface IEncryptionKey {

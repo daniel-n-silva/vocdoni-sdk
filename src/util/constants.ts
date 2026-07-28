@@ -47,6 +47,20 @@ export const CENSUS_CHUNK_SIZE = 8192;
 export const CENSUS_ASYNC = true;
 export const CENSUS_ASYNC_WAIT_TIME = 5000;
 
+/**
+ * Hosts allowed to serve election metadata documents which are not stored on
+ * IPFS. Entries match the host itself and any of its subdomains, and the `*`
+ * entry matches everything.
+ *
+ * Metadata URIs come from the chain and are therefore attacker influenceable,
+ * so the SDK only requests the ones served by a host the consumer trusts. Self
+ * hosted deployments are expected to extend this list through the `metadata`
+ * client option.
+ */
+export const METADATA_ALLOWED_HOSTS = ['vocdoni.io', 'vocdoni.net'];
+export const METADATA_FETCH_TIMEOUT = 5000;
+export const METADATA_MAX_SIZE = 1024 * 1024;
+
 export enum TxMessage {
   REGISTER_SIK = 'You are signing a Vocdoni transaction of type REGISTER_SIK for secret identity key {sik}.\n\nThe hash of this transaction is {hash} and the destination chain is {chainId}.',
   SET_ACCOUNT = 'You are signing a Vocdoni transaction of type SET_ACCOUNT/{type}.\n\nThe hash of this transaction is {hash} and the destination chain is {chainId}.',

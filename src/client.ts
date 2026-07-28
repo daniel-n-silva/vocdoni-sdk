@@ -57,6 +57,7 @@ import {
   FaucetService,
   FetchElectionsParametersWithPagination,
   FileService,
+  MetadataOptions,
   VoteService,
   VoteSteps,
   VoteStepValue,
@@ -105,6 +106,7 @@ type CensusOptions = {
  * @property {Wallet | Signer | RemoteSigner | null} wallet `Wallet` or `Signer` object from `ethersproject` library
  * @property {string | null} electionId Required by other methods like `submitVote` or `createElection`.
  * @property {FaucetOptions | null} faucet Specify custom Faucet options
+ * @property {MetadataOptions | null} metadata Specify how metadata stored outside IPFS is resolved
  */
 export type ClientOptions = {
   env: EnvOptions;
@@ -114,6 +116,7 @@ export type ClientOptions = {
   faucet?: Partial<FaucetOptions>;
   tx_wait?: TxWaitOptions;
   census?: CensusOptions;
+  metadata?: MetadataOptions;
 };
 
 /**
@@ -159,7 +162,7 @@ export class VocdoniSDKClient {
       chunk_size: opts.census?.chunk ?? CENSUS_CHUNK_SIZE,
       async: { async: opts.census?.async ?? CENSUS_ASYNC, wait: opts.census?.wait_time ?? CENSUS_ASYNC_WAIT_TIME },
     });
-    this.fileService = new FileService({ url: this.url });
+    this.fileService = new FileService({ url: this.url, metadata: opts.metadata });
     this.chainService = new ChainService({
       url: this.url,
       txWait: {
@@ -176,6 +179,7 @@ export class VocdoniSDKClient {
       url: this.url,
       censusService: this.censusService,
       chainService: this.chainService,
+      fileService: this.fileService,
     });
     this.voteService = new VoteService({
       url: this.url,
