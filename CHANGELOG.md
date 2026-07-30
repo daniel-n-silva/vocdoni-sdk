@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `client.cspSign` and `client.cspVote` now accept an optional `weight` parameter for weighted CSP elections. When `weight` is omitted from `cspVote`, it defaults to the weight passed to the preceding `cspSign` call on the same client/CSP service instance; passing a conflicting weight throws instead of silently mismatching the two.
+
+### Fixed
+
+- Fixed weighted CSP blind votes being rejected on-chain: the blind-signed CA bundle (`cspSign`) omitted the vote weight while the submitted bundle (`cspVote`/`submitVote`) included it, so the chain's signature verification always failed for weighted blind votes.
+- `voteWeight` in the CSP `CAbundle` is now encoded as a canonical fixed 8-byte big-endian value instead of a minimal-length encoding, matching what the chain expects for CSP salt derivation. This is a wire-format change: anyone using the non-blind `ECDSA_PIDSALTED` CSP proof type with a signature obtained externally (i.e. not produced by this SDK) needs to re-generate it against the new encoding.
+
 ## [0.9.2] - 2025-02-25
 
 ## [0.9.1] - 2024-09-17
