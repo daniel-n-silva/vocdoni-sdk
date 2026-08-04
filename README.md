@@ -333,6 +333,16 @@ More information can be found in the [documentation][approval voting documentati
 Here is a [full working example][ranked voting example] of how to create a ranked voting election.
 More information can be found in the [documentation][ranked voting documentation].
 
+#### Single Transferable Vote (STV)
+
+STV isn't a native election type — there's no on-chain tally for it, since it
+requires the individual rankings (not just an aggregate distribution matrix)
+to run elimination rounds and transfer votes. Here is a [full working
+example][stv example] of building STV on top of a `MultiChoiceElection` used
+purely as an auditable registration layer, with the actual tally computed
+off-chain from the raw envelopes — reproducible by anyone, not just the app
+that ran the election.
+
 ### Other election functionalities
 
 #### Estimate election cost
@@ -1043,6 +1053,7 @@ This SDK is licensed under the [GNU Affero General Public License v3.0][license]
 [approval voting documentation]: https://developer.vocdoni.io/protocol/ballot#multiquestion
 [ranked voting example]: ./examples/typescript/src/ranked.ts
 [ranked voting documentation]: https://developer.vocdoni.io/protocol/ballot#linear-weighted-choice
+[stv example]: ./examples/typescript/src/stv.ts
 [license]: ./LICENSE
 [devportal]: https://developer.vocdoni.io/sdk
 [builddocs]: ./docs/README.md
