@@ -22,7 +22,7 @@ export interface StvResult {
  * eliminated yet); eliminate the option with the fewest votes; repeat until
  * one remains.
  */
-export function contarSTV(rankings: number[][], numOptions: number): StvResult {
+export function countSTV(rankings: number[][], numOptions: number): StvResult {
   const eliminated = new Set<number>();
   const rounds: Round[] = [];
 

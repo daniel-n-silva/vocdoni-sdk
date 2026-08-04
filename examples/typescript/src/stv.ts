@@ -2,7 +2,7 @@ import chalk from 'chalk';
 import { MultiChoiceElection, VoteAPI, type IVotePackage } from '@vocdoni/sdk';
 import { getDefaultClient, getRandomVoters, submitVote, waitForElectionReady } from './utils/utils';
 import { getPlainCensus } from './utils/election-process';
-import { contarSTV } from './utils/stv-tally';
+import { countSTV } from './utils/stv-tally';
 
 /**
  * Example: Single Transferable Vote (STV) built on top of the Vocdoni SDK.
@@ -38,8 +38,7 @@ const RANKINGS = [
 ];
 
 async function main() {
-  console.log(chalk.yellow('Validating the STV counting algorithm against a hand-crafted reference case first...'));
-  const reference = contarSTV(
+  const reference = countSTV(
     [
       [1, 0, 2],
       [1, 2, 0],
@@ -48,9 +47,11 @@ async function main() {
     ],
     3
   );
-  console.log('Reference winner (expected option 1):', reference.winner);
+  if (reference.winner !== 1) {
+    throw new Error(`STV reference case failed: expected winner 1, got ${reference.winner}`);
+  }
 
-  console.log(chalk.yellow('Creating census with some random wallets...'));
+  console.log('Creating census with some random wallets...');
   const { census, participants } = getPlainCensus(VOTERS_NUM);
 
   console.log('Creating election...');
@@ -77,12 +78,11 @@ async function main() {
   console.log(chalk.green('Election created!'), chalk.blue(electionId));
   await waitForElectionReady(client, electionId);
 
-  console.log(chalk.yellow('Submitting each voter’s full ranking...'));
   const voteIds = await Promise.all(
     participants.map((participant, i) => submitVote(participant, electionId, RANKINGS[i]))
   );
 
-  console.log(chalk.yellow('Reading back the raw rankings from the chain (not fetchResults)...'));
+  // read raw envelopes (not fetchResults) so the STV tally can be re-run independently by anyone
   const rankingsFromChain = await Promise.all(
     voteIds.map(async (voteId) => {
       const info = await VoteAPI.info(client.url, voteId);
@@ -90,15 +90,9 @@ async function main() {
     })
   );
 
-  const result = contarSTV(rankingsFromChain, OPTIONS.length);
+  const result = countSTV(rankingsFromChain, OPTIONS.length);
   console.log(chalk.green('Winner:'), OPTIONS[result.winner]);
   console.log('Rounds:', JSON.stringify(result.rounds, null, 2));
-  console.log(
-    chalk.yellow(
-      'Anyone can independently re-run this same tally: fetch the same voteIds from the public API, ' +
-        'read their raw `package.votes`, and run the same elimination algorithm — no need to trust our app.'
-    )
-  );
 }
 
 main()
