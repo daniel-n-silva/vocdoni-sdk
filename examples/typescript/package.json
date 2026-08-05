@@ -6,14 +6,15 @@
   "license": "MIT",
   "dependencies": {
     "@ethersproject/wallet": "^5.7.0",
-    "@vocdoni/sdk": "0.7.1",
+    "@vocdoni/sdk": "^0.9.3",
     "chalk": "4.1.2"
   },
   "scripts": {
     "start": "ts-node src/index.ts",
     "quadratic": "ts-node src/quadratic.ts",
     "approval": "ts-node src/approval.ts",
-    "ranked": "ts-node src/ranked.ts"
+    "ranked": "ts-node src/ranked.ts",
+    "stv-meek": "ts-node src/stv-meek.ts"
   },
   "devDependencies": {
     "ts-node": "^10.9.1",
