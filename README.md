@@ -333,6 +333,15 @@ More information can be found in the [documentation][approval voting documentati
 Here is a [full working example][ranked voting example] of how to create a ranked voting election.
 More information can be found in the [documentation][ranked voting documentation].
 
+#### Two-round (runoff) elections
+
+Not a native election type — there's no single-election primitive for "if
+nobody clears 50%, automatically hold a second round between the top two".
+This example shows the orchestration: two ordinary native single-choice
+elections, chained programmatically. Nothing here needs a custom tally -
+`fetchResults()` is enough for both rounds. Here is a
+[full working example][runoff example].
+
 ### Other election functionalities
 
 #### Estimate election cost
@@ -1043,6 +1052,7 @@ This SDK is licensed under the [GNU Affero General Public License v3.0][license]
 [approval voting documentation]: https://developer.vocdoni.io/protocol/ballot#multiquestion
 [ranked voting example]: ./examples/typescript/src/ranked.ts
 [ranked voting documentation]: https://developer.vocdoni.io/protocol/ballot#linear-weighted-choice
+[runoff example]: ./examples/typescript/src/runoff.ts
 [license]: ./LICENSE
 [devportal]: https://developer.vocdoni.io/sdk
 [builddocs]: ./docs/README.md
