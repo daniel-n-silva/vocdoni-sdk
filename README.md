@@ -333,6 +333,19 @@ More information can be found in the [documentation][approval voting documentati
 Here is a [full working example][ranked voting example] of how to create a ranked voting election.
 More information can be found in the [documentation][ranked voting documentation].
 
+#### Borda count
+
+Note: the SDK already has a native "ranked" election type (see the ranked
+voting section above) whose raw per-choice, per-rank aggregate is
+structurally close to a Borda count. This example takes the more general
+route instead — registering each voter's full ranking via
+`MultiChoiceElection`, the same pattern as the STV and Condorcet examples in
+this folder — because it composes directly with those: the same raw
+envelope format works for IRV, STV, Condorcet or Borda without changing how
+the election is built or how voters vote. Here is a
+[full working example][borda count example], with the tally computed
+off-chain from the raw envelopes.
+
 ### Other election functionalities
 
 #### Estimate election cost
@@ -1043,6 +1056,7 @@ This SDK is licensed under the [GNU Affero General Public License v3.0][license]
 [approval voting documentation]: https://developer.vocdoni.io/protocol/ballot#multiquestion
 [ranked voting example]: ./examples/typescript/src/ranked.ts
 [ranked voting documentation]: https://developer.vocdoni.io/protocol/ballot#linear-weighted-choice
+[borda count example]: ./examples/typescript/src/borda.ts
 [license]: ./LICENSE
 [devportal]: https://developer.vocdoni.io/sdk
 [builddocs]: ./docs/README.md
