@@ -335,13 +335,12 @@ More information can be found in the [documentation][ranked voting documentation
 
 #### Proportional seat allocation (D'Hondt / Sainte-Laguë)
 
-Unlike the ranked-ballot examples above, this one needs no custom ballot
-encoding at all - it's an ordinary native single-choice election (each voter
-picks one list/party). The only thing missing from the SDK is the seat
-*allocation* step: turning `fetchResults()`'s vote totals per option into
-integer seat counts. That's pure arithmetic on the aggregate, and needs no
-raw envelope access. Here is a [full working example][party list example]
-of both divisor methods.
+An ordinary native single-choice election (each voter picks one list); the
+only non-native step is turning the aggregate vote totals into seat counts.
+The [full working example][party list example] commits the allocation rule
+(method, seat count, threshold, tie-break) to the election metadata before
+voting opens and reads it back to run the tally, so the result is
+reproducible from the published process.
 
 ### Other election functionalities
 
