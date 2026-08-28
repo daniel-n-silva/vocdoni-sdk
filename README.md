@@ -335,12 +335,12 @@ More information can be found in the [documentation][ranked voting documentation
 
 #### Two-round (runoff) elections
 
-Not a native election type — there's no single-election primitive for "if
-nobody clears 50%, automatically hold a second round between the top two".
-This example shows the orchestration: two ordinary native single-choice
-elections, chained programmatically. Nothing here needs a custom tally -
-`fetchResults()` is enough for both rounds. Here is a
-[full working example][runoff example].
+Orchestration of two ordinary native single-choice elections by one
+organiser over one census. The [full working example][runoff example] ends
+round 1 before reading its result, commits the runoff rule (majority
+denominator, tie-break) to round 1's metadata and links round 2 back to it.
+A round-2 vote is a fresh vote by the same electorate, not a transfer of
+round-1 votes.
 
 ### Other election functionalities
 

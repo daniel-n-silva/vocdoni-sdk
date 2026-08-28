@@ -1,44 +1,45 @@
 import chalk from 'chalk';
-import { Election, Vote } from '@vocdoni/sdk';
+import { CustomMeta, Election, PlainCensus, Vote, VocdoniSDKClient } from '@vocdoni/sdk';
+import { Wallet } from '@ethersproject/wallet';
 import { getDefaultClient, waitForElectionReady } from './utils/utils';
 import { getPlainCensus } from './utils/election-process';
+import { needsRunoff, roundWinner, runoffContenders, RunoffRules } from './utils/runoff-tally';
 
 /**
- * Example: two-round (runoff) elections built on top of the Vocdoni SDK.
+ * Example: two-round (runoff) election.
  *
- * Not a native election type — there's no single-election primitive for "if
- * nobody clears 50%, automatically hold a second round between the top two".
- * This example shows the orchestration: two ordinary native single-choice
- * elections, chained programmatically. Nothing here needs a custom tally —
- * `fetchResults()` is enough for both rounds — the missing piece is just the
- * decision logic and the second `createElection()` call.
- *
- * Real-world use: the two-round system is the most common single-winner
- * system worldwide for presidential elections — used by France (president,
- * legislature and regional elections), and at least 40 countries overall,
- * concentrated in Europe, Africa and South America. See
- * https://en.wikipedia.org/wiki/Two-round_system and
- * https://www.france24.com/en/france/20220211-explainer-how-does-france-s-two-round-presidential-election-work
+ * There is no native "hold a second round if nobody clears 50%" primitive,
+ * so this is orchestration: two ordinary native single-choice elections run
+ * by the same organiser over the same census. Each round is ended before
+ * its results are read. The runoff rule (majority denominator, tie-break)
+ * is committed to round 1's metadata; round 2's metadata points back at
+ * round 1. A round-2 vote is a fresh vote by the same electorate, not a
+ * transfer of round-1 votes.
  *
  * https://developer.vocdoni.io/protocol/ballot
  */
 
 const CANDIDATES = ['Alameda', 'Bettencourt', 'Carvalho', 'Dias'];
+const RULES: RunoffRules = { majorityThreshold: 0.5 };
 
-// deterministic distribution for this demo — nobody clears 50%, so a second
-// round between the top two (Alameda, Bettencourt) is expected
-const FIRST_ROUND_DISTRIBUTION = [5, 4, 2, 1]; // votes per candidate, in CANDIDATES order
+// Deterministic demo. Round 1: nobody clears 50%. Round 2: the same voters
+// choose between the top two.
+const ROUND1_DISTRIBUTION = [5, 4, 2, 1];
+const ROUND2_DISTRIBUTION = [7, 5];
 
-async function runSingleChoiceElection(title: string, options: string[], distribution: number[]) {
-  const totalVoters = distribution.reduce((a, b) => a + b, 0);
-  const { census, participants } = getPlainCensus(totalVoters);
-
-  const { client } = getDefaultClient();
-  await client.createAccount();
-
+async function runRound(
+  client: VocdoniSDKClient,
+  census: PlainCensus,
+  voters: Wallet[],
+  title: string,
+  options: string[],
+  distribution: number[],
+  meta: CustomMeta
+): Promise<{ electionId: string; votes: bigint[] }> {
   const endDate = new Date();
   endDate.setHours(endDate.getHours() + 10);
   const election = Election.from({ title, description: '', endDate: endDate.getTime(), census });
+  election.meta = meta;
   election.addQuestion(
     title,
     '',
@@ -53,58 +54,59 @@ async function runSingleChoiceElection(title: string, options: string[], distrib
   let voterIndex = 0;
   for (let choice = 0; choice < distribution.length; choice++) {
     for (let i = 0; i < distribution[choice]; i++) {
-      const voterClient = getDefaultClient(participants[voterIndex++]).client;
+      const voterClient = getDefaultClient(voters[voterIndex++]).client;
       voterClient.setElectionId(electionId);
       await voterClient.submitVote(new Vote([choice]));
     }
   }
 
+  // End the round before reading its results — no decision on provisional counts.
+  await client.endElection(electionId);
   const finalElection = await client.fetchElection(electionId);
-  const voteCounts = finalElection.results[0].map((count) => Number(count));
-  const total = voteCounts.reduce((a, b) => a + b, 0);
-  return { electionId, voteCounts, total };
+  return { electionId, votes: finalElection.results[0].map((count) => BigInt(count)) };
 }
 
 async function main() {
+  const voterCount = ROUND1_DISTRIBUTION.reduce((a, b) => a + b, 0);
+  const { census, participants } = getPlainCensus(voterCount);
+
+  const { client } = getDefaultClient();
+  await client.createAccount();
+
   console.log(chalk.yellow('Round 1'));
-  const round1 = await runSingleChoiceElection(
+  const round1 = await runRound(
+    client,
+    census,
+    participants,
     'Council presidency, round 1 ' + new Date().toISOString(),
     CANDIDATES,
-    FIRST_ROUND_DISTRIBUTION
+    ROUND1_DISTRIBUTION,
+    { runoff: { round: 1, rules: RULES } }
   );
-  console.log('Votes:', CANDIDATES.map((c, i) => `${c}: ${round1.voteCounts[i]}`).join(', '));
+  console.log('Votes:', CANDIDATES.map((c, i) => `${c}: ${round1.votes[i]}`).join(', '));
 
-  const leaderIndex = round1.voteCounts.reduce((best, v, i) => (v > round1.voteCounts[best] ? i : best), 0);
-  const leaderShare = round1.voteCounts[leaderIndex] / round1.total;
-
-  if (leaderShare > 0.5) {
-    console.log(chalk.green(`${CANDIDATES[leaderIndex]} wins in round 1 with ${(leaderShare * 100).toFixed(1)}%`));
+  if (!needsRunoff(round1.votes, RULES)) {
+    const [top] = runoffContenders(round1.votes);
+    console.log(chalk.green(`${CANDIDATES[top]} wins in round 1 (absolute majority)`));
     return;
   }
 
-  console.log(
-    chalk.yellow(`No absolute majority (leader ${CANDIDATES[leaderIndex]} at ${(leaderShare * 100).toFixed(1)}%) — running round 2`)
-  );
-
-  const ranked = round1.voteCounts
-    .map((votes, index) => ({ index, votes }))
-    .sort((a, b) => b.votes - a.votes);
-  const [first, second] = ranked;
-  const runoffCandidates = [CANDIDATES[first.index], CANDIDATES[second.index]];
-
+  const [firstIdx, secondIdx] = runoffContenders(round1.votes);
+  const runoffCandidates = [CANDIDATES[firstIdx], CANDIDATES[secondIdx]];
   console.log(chalk.yellow('Round 2:'), runoffCandidates.join(' vs '));
-  // second-round distribution derived from a plausible transfer of the
-  // eliminated candidates' votes — hardcoded here for a reproducible demo
-  const round2 = await runSingleChoiceElection(
+
+  const round2 = await runRound(
+    client,
+    census,
+    participants,
     'Council presidency, round 2 ' + new Date().toISOString(),
     runoffCandidates,
-    [7, 5]
+    ROUND2_DISTRIBUTION,
+    { runoff: { round: 2, runoffOf: round1.electionId, contenders: [firstIdx, secondIdx], rules: RULES } }
   );
-  const winnerIndex = round2.voteCounts[0] > round2.voteCounts[1] ? 0 : 1;
-  console.log(
-    chalk.green(`Winner: ${runoffCandidates[winnerIndex]}`),
-    `(${round2.voteCounts[0]} vs ${round2.voteCounts[1]})`
-  );
+
+  const winner = roundWinner(round2.votes);
+  console.log(chalk.green(`Winner: ${runoffCandidates[winner]}`), `(${round2.votes[0]} vs ${round2.votes[1]})`);
 }
 
 main()
