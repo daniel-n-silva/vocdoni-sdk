@@ -335,15 +335,13 @@ More information can be found in the [documentation][ranked voting documentation
 
 #### Condorcet method (Schulze)
 
-Condorcet methods pick the candidate who would beat every other candidate in
-a head-to-head comparison, if such a candidate exists. Like STV, this isn't
-a native election type — there's no on-chain tally for it, since it requires
-the individual rankings (not just an aggregate distribution matrix) to build
-the pairwise preference matrix. Here is a [full working example][condorcet example]
-of building the Schulze method (the most widely used Condorcet-consistent
-method in practice) on top of a `MultiChoiceElection` used purely as an
-auditable registration layer, with the tally computed off-chain from the raw
-envelopes.
+Condorcet methods pick the candidate who beats every other in a head-to-head
+comparison. The [full working example][condorcet example] encodes each
+candidate pair as one binary field of a native single-choice-per-field
+election, so `results[field]` is `[votes for i, votes for j]` — the pairwise
+matrix, straight from the canonical result, census weights applied. Schulze
+runs on that matrix. Needs C(n, 2) fields, so up to 11 candidates under the
+64-field ballot cap.
 
 ### Other election functionalities
 

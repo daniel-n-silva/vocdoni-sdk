@@ -1,29 +1,21 @@
 import chalk from 'chalk';
-import { MultiChoiceElection, VoteAPI, type IVotePackage } from '@vocdoni/sdk';
+import { Election, IVoteType } from '@vocdoni/sdk';
 import { getDefaultClient, submitVote, waitForElectionReady } from './utils/utils';
 import { getPlainCensus } from './utils/election-process';
-import { countSchulze } from './utils/schulze-tally';
+import { candidatePairs, pairwiseFromResults, rankingToPairwiseBallot, schulze } from './utils/schulze-tally';
 
 /**
- * Example: Condorcet method (Schulze variant) built on top of the Vocdoni SDK.
+ * Example: Condorcet method (Schulze variant).
  *
- * Condorcet methods pick the candidate who would beat every other candidate
- * in a head-to-head comparison, if such a candidate exists. Like STV, this is
- * not a native election type in Vocdoni — there is no on-chain tally for it,
- * because it requires the individual rankings (not just an aggregate
- * distribution matrix) to build the pairwise preference matrix.
+ * Ballot: each unordered candidate pair {i, j} is one binary field of a
+ * native single-choice-per-field election — value 0 prefers i, value 1
+ * prefers j. `fetchElection().results[field]` is then `[weight for i,
+ * weight for j]`, i.e. the pairwise preference matrix, with census weights
+ * already applied and no raw envelope reading.
  *
- * Real-world use: the Schulze method is the most widely adopted Condorcet
- * method in practice — used for internal elections by Debian (since 2003),
- * the Wikimedia Foundation (since 2008), Gentoo, KDE, and the Pirate Party of
- * Sweden and Germany. See https://en.wikipedia.org/wiki/Schulze_method.
- *
- * The approach here is the same as the STV example: use a `MultiChoiceElection`
- * purely as an **auditable registration layer** for each voter's full ranking
- * (the vote array itself *is* the ranking — position = preference order,
- * value = candidate index). The tally is computed off-chain from the raw
- * envelopes (via `VoteAPI.info`, not `fetchResults()`), so anyone can
- * independently re-run it and get the same winner.
+ * The method and the pair ordering are committed to the election metadata
+ * so the tally is reproducible. Needs C(n, 2) fields; the Ballot Protocol's
+ * 64-field cap means up to 11 candidates this way.
  *
  * https://developer.vocdoni.io/protocol/ballot
  */
@@ -40,23 +32,8 @@ const RANKINGS = [
 ];
 
 async function main() {
-  // Reference case: the worked example from the Schulze method Wikipedia
-  // page (45 voters, candidates A..E) — well-known result, winner is E.
-  const A = 0, B = 1, C = 2, D = 3, E = 4;
-  const reference: number[][] = [
-    ...Array(5).fill([A, C, B, E, D]),
-    ...Array(5).fill([A, D, E, C, B]),
-    ...Array(8).fill([B, E, D, A, C]),
-    ...Array(3).fill([C, A, B, E, D]),
-    ...Array(7).fill([C, A, E, B, D]),
-    ...Array(2).fill([C, B, A, D, E]),
-    ...Array(7).fill([D, C, E, B, A]),
-    ...Array(8).fill([E, B, A, D, C]),
-  ];
-  const referenceResult = countSchulze(reference, 5);
-  if (referenceResult.winner !== E) {
-    throw new Error(`Schulze reference case failed: expected winner ${E} (E), got ${referenceResult.winner}`);
-  }
+  const n = OPTIONS.length;
+  const pairs = candidatePairs(n);
 
   console.log('Creating census with some random wallets...');
   const { census, participants } = getPlainCensus(RANKINGS.length);
@@ -65,19 +42,28 @@ async function main() {
   const { client } = getDefaultClient();
   await client.createAccount();
 
-  const election = MultiChoiceElection.from({
+  const voteType: IVoteType = {
+    uniqueChoices: false,
+    costFromWeight: false,
+    maxCount: pairs.length, // one field per candidate pair
+    maxValue: 1, // binary: 0 prefers the first candidate of the pair, 1 the second
+    maxTotalCost: 0,
+  };
+
+  const endDate = new Date();
+  endDate.setHours(endDate.getHours() + 10);
+  const election = Election.from({
     title: 'Condorcet (Schulze) — retreat destination ' + new Date().toISOString(),
-    description: 'Rank all options — the raw ranking is the vote array itself.',
-    endDate: new Date(new Date().getTime() + 10 * 60 * 60 * 1000).getTime(),
+    description: 'For each pairing, pick the option you prefer.',
+    endDate: endDate.getTime(),
     census,
-    maxNumberOfChoices: OPTIONS.length,
+    voteType,
   });
-  election.minNumberOfChoices = OPTIONS.length;
-  election.canRepeatChoices = false;
+  election.meta = { condorcet: { method: 'schulze', pairs, tieBreak: 'lowest-index' } };
   election.addQuestion(
-    'Rank these retreat destinations by preference',
+    'Head-to-head preferences',
     '',
-    OPTIONS.map((title, value) => ({ title, value }))
+    pairs.map(([i, j], value) => ({ title: `${OPTIONS[i]} vs ${OPTIONS[j]}`, value }))
   );
 
   const electionId = await client.createElection(election);
@@ -85,21 +71,17 @@ async function main() {
   console.log(chalk.green('Election created!'), chalk.blue(electionId));
   await waitForElectionReady(client, electionId);
 
-  const voteIds = await Promise.all(
-    participants.map((participant, i) => submitVote(participant, electionId, RANKINGS[i]))
+  await Promise.all(
+    participants.map((participant, i) => submitVote(participant, electionId, rankingToPairwiseBallot(RANKINGS[i], n)))
   );
 
-  // read raw envelopes (not fetchResults) so the tally can be re-run independently by anyone
-  const rankingsFromChain = await Promise.all(
-    voteIds.map(async (voteId) => {
-      const info = await VoteAPI.info(client.url, voteId);
-      return (info.package as IVotePackage).votes;
-    })
-  );
+  await client.endElection(electionId);
+  const finalElection = await client.fetchElection(electionId);
+  const pairwise = pairwiseFromResults(finalElection.results, n);
+  const { winner } = schulze(pairwise);
 
-  const result = countSchulze(rankingsFromChain, OPTIONS.length);
-  console.log(chalk.green('Winner:'), OPTIONS[result.winner]);
-  console.log('Pairwise preference matrix:', JSON.stringify(result.pairwise));
+  console.log(chalk.green('Winner:'), OPTIONS[winner]);
+  console.log('Pairwise matrix:', JSON.stringify(pairwise.map((row) => row.map(String))));
 }
 
 main()
