@@ -1,24 +1,23 @@
 /**
- * Borda count tally — not a native Vocdoni election type as a *ranked*
- * ballot (see borda.ts for why), computed here from full rankings.
+ * Borda count from the native ranked (linear-weighted) result matrix.
  *
- * Each ranking is an array of option indices ordered by preference
- * (ranking[0] = 1st choice, ranking[1] = 2nd choice, ...). Each position
- * awards points: 1st choice gets `numOptions - 1` points, last choice gets 0.
+ * A ranked election returns `results[choice][value]` = the summed voter
+ * weight that assigned `value` points to `choice`. The Borda score of a
+ * choice is the weighted sum of the points it received:
+ * `sum over value of (value * results[choice][value])`.
+ *
+ * This reads the canonical on-chain aggregate, not raw envelopes, so census
+ * weights are already applied and the result is independently reproducible.
  */
+export const bordaScores = (results: string[][]): bigint[] =>
+  results.map((row) => row.reduce((sum, weight, value) => sum + BigInt(value) * BigInt(weight), 0n));
 
-export interface BordaResult {
-  winner: number;
-  points: number[];
-}
-
-export function countBorda(rankings: number[][], numOptions: number): BordaResult {
-  const points = Array(numOptions).fill(0);
-  for (const ranking of rankings) {
-    ranking.forEach((option, position) => {
-      points[option] += numOptions - 1 - position;
-    });
+/** Winning choice index. Ties are broken by lowest choice index. */
+export const bordaWinner = (results: string[][]): number => {
+  const scores = bordaScores(results);
+  let winner = 0;
+  for (let i = 1; i < scores.length; i++) {
+    if (scores[i] > scores[winner]) winner = i;
   }
-  const winner = points.reduce((best, p, i) => (p > points[best] ? i : best), 0);
-  return { winner, points };
-}
+  return winner;
+};
